@@ -286,7 +286,8 @@ function drawIdx(){
   var nm=CODES.filter(function(c){return c[0]===S.code})[0][1],last=all[all.length-1],pl={D:'日',W:'周',M:'月'}[S.per];
   $('#ipx').textContent=fx(last.c,2);
   $('#ichg').className=cls(last.chg);$('#ichg').textContent=pct(last.chg);
-  $('#idt').textContent=nm+' · '+last.d+(S.per==='D'?'':'（本'+pl+'至今）')+(dense&&S.mode==='K'?' · 数据较密，已用折线':'');
+  var sx=sess();
+  $('#idt').textContent=nm+' · '+last.d+(S.per==='D'?'':'（本'+pl+'至今）')+(sx&&sx.date===all[all.length-1].d?' · 含今日'+sessTxt():'')+(dense&&S.mode==='K'?' · 数据较密，已用折线':'');
   var hb=list.reduce(function(a,b){return b.h>a.h?b:a}),lb=list.reduce(function(a,b){return b.l<a.l?b:a}),f=list[0],l=list[n-1];
   $('#istat').innerHTML=
     '<div>区间涨跌（收盘价）<b class="'+cls(l.c-f.c)+'">'+pct(l.c/f.c-1)+'</b>'+f.d+' → '+l.d+'</div>'+
@@ -330,12 +331,12 @@ function drawMkt(){
   seg($('#mrng'),S.mrng,function(v){S.mrng=+v;save();msel=-1;drawMkt()});
   var off=S.mrng?Math.max(0,MK.length-S.mrng):0,rows=MK.slice(off),n=rows.length;
   if(msel<0||msel>=n)msel=n-1;
-  var avg=[];for(var i=0;i<MK.length;i++){var seg5=MK.slice(Math.max(0,i-4),i+1).filter(function(r){return r.amount_w!=null});
-    avg.push(i>=4&&seg5.length===5?seg5.reduce(function(a,r){return a+r.amount_w},0)/5:null)}
+  var avg=[];for(var i=0;i<MK.length;i++){var seg5=MK.slice(Math.max(0,i-4),i+1).filter(function(r){return r.amount_w!=null&&!r.p});
+    avg.push(i>=4&&seg5.length===5&&!MK[i].p?seg5.reduce(function(a,r){return a+r.amount_w},0)/5:null)}
   var amx=Math.max.apply(null,rows.map(function(r){return r.amount_w||0}).concat([.1]))*1.1;
   mchart($('#c-amt'),110,function(g,H){var s='',pts=[];
     rows.forEach(function(r,i){if(r.amount_w==null)return;var h=r.amount_w/amx*H,bw=Math.max(2,Math.min(26,g.slot*.66));
-      s+='<rect class="bar" x="'+(g.PL+g.slot*(i+.5)-bw/2)+'" y="'+(H-h)+'" width="'+bw+'" height="'+h+'"/>';
+      s+='<rect class="bar" style="'+(r.p?'opacity:.4':'')+'" x="'+(g.PL+g.slot*(i+.5)-bw/2)+'" y="'+(H-h)+'" width="'+bw+'" height="'+h+'"/>';
       var a=avg[off+i];if(a!=null)pts.push((g.PL+g.slot*(i+.5)).toFixed(1)+','+(H-a/amx*H).toFixed(1))});
     if(pts.length>1)s+='<polyline class="avg" points="'+pts.join(' ')+'"/>';return s},n,rows,
     function(g,H){return [0,1].map(function(f){var v=amx/1.1*f,y=H-v/amx*H;return '<line class="gl" x1="'+g.PL+'" x2="'+(g.W-g.PR)+'" y1="'+y+'" y2="'+y+'"/><text class="tx" x="'+(g.W-g.PR+4)+'" y="'+(y+3)+'">'+v.toFixed(2)+'</text>'}).join('')});
@@ -354,15 +355,15 @@ function drawMkt(){
     return s},n,rows,function(g,H){return [0,1].map(function(f){var y=H-f*H/1.15,v=lmx/1.15*f;
       return '<line class="gl" x1="'+g.PL+'" x2="'+(g.W-g.PR)+'" y1="'+y+'" y2="'+y+'"/><text class="tx" x="'+(g.W-g.PR+4)+'" y="'+(y+3)+'">'+Math.round(v)+'</text>'}).join('')});
   var r=rows[msel],pr=off+msel>0?MK[off+msel-1]:null,tot=r.up==null?null:r.up+r.down+r.flat;
-  $('#minfo').innerHTML='<b>'+r.date+'</b>　成交额 <b>'+(r.amount_w==null?'—':r.amount_w.toFixed(2)+' 万亿')+'</b>'+
-    (pr&&pr.amount_w!=null&&r.amount_w!=null?' <span class="'+cls(r.amount_w-pr.amount_w)+'">较上一记录日 '+pct(r.amount_w/pr.amount_w-1,1)+'</span>':'')+
+  $('#minfo').innerHTML='<b>'+r.date+'</b>'+(r.p?' <span style="color:var(--c2)">（半日，截至 '+r.p+'，非收盘）</span>':'')+'　成交额 <b>'+(r.amount_w==null?'—':r.amount_w.toFixed(2)+' 万亿')+'</b>'+
+    (!r.p&&pr&&pr.amount_w!=null&&r.amount_w!=null?' <span class="'+cls(r.amount_w-pr.amount_w)+'">较上一记录日 '+pct(r.amount_w/pr.amount_w-1,1)+'</span>':'')+
     '<br>上涨 <b class="up">'+fx(r.up,0)+'</b> · 下跌 <b class="dn">'+fx(r.down,0)+'</b> · 平盘 <b>'+fx(r.flat,0)+'</b>'+(tot?' · 上涨占比 <b>'+(r.up/tot*100).toFixed(1)+'%</b>':'')+
     '<br>涨停 <b class="up">'+fx(r.zt,0)+'</b> · 跌停 <b class="dn">'+fx(r.dt,0)+'</b>';
   $('#mtab tbody').innerHTML=rows.map(function(r,i){return {r:r,i:i}}).reverse().slice(0,40).map(function(o){var r=o.r;
-    return '<tr data-i="'+o.i+'" class="'+(o.i===msel?'sel':'')+'"><td>'+r.date.slice(5)+'</td><td>'+(r.amount_w==null?'—':r.amount_w.toFixed(2))+'</td><td><span class="up">'+fx(r.up,0)+'</span> / <span class="dn">'+fx(r.down,0)+'</span></td><td><span class="up">'+fx(r.zt,0)+'</span> / <span class="dn">'+fx(r.dt,0)+'</span></td></tr>'}).join('');
+    return '<tr data-i="'+o.i+'" class="'+(o.i===msel?'sel':'')+'"><td>'+r.date.slice(5)+(r.p?' <small style="color:var(--c2)">'+r.p+'前</small>':'')+'</td><td>'+(r.amount_w==null?'—':r.amount_w.toFixed(2))+'</td><td><span class="up">'+fx(r.up,0)+'</span> / <span class="dn">'+fx(r.down,0)+'</span></td><td><span class="up">'+fx(r.zt,0)+'</span> / <span class="dn">'+fx(r.dt,0)+'</span></td></tr>'}).join('');
   $$('#mtab tbody tr').forEach(function(tr){tr.onclick=function(){msel=+tr.getAttribute('data-i');drawMkt()}});
   var full=MK.filter(function(r){return r.up!=null}).length;
-  $('#mnote').textContent='目前累计 '+MK.length+' 个交易日的记录，其中涨跌家数、涨停跌停 '+full+' 天。这两项没有可回补的历史来源，只能每天收盘后逐日累积；缺的显示“—”，不估算。'+
+  $('#mnote').textContent='目前累计 '+MK.length+' 个交易日的记录，其中涨跌家数、涨停跌停 '+full+' 天。盘中/午休更新的当天记录标“半日”，浅色柱是截至该时刻的数据，收盘后会被完整记录替换。这两项没有可回补的历史来源，只能每天收盘后逐日累积；缺的显示“—”，不估算。'+
     '成交额按上证、深证成指两个行情口径相加，涨跌家数为沪深A股（不含北交所，停牌不计）。点图或点表格行可看当天数值。';
 }
 
@@ -404,12 +405,17 @@ function drawNews(){
 }
 
 // ---------- 页脚 ----------
-getJSON('data/meta.json').then(function(m){
-  $('#foot').innerHTML='数据整理于 '+esc(m.updated)+'，指数日K截至 '+esc(m.kline_last)+'；收盘后更新，非实时行情。<br>数据来自公开网页行情接口，可能有延迟或误差，本页仅作信息整理，不构成任何投资建议，市场有风险，据此操作风险自负。';
-}).catch(function(){$('#foot').textContent='数据来自公开网页行情接口，可能有延迟或误差，本页仅作信息整理，不构成任何投资建议。'});
-
-var h=(location.hash||'').slice(1);
-show(/^(idx|mkt|news)$/.test(h)?h:S.tab);
+var META=null;
+function sess(){var s=META&&META.session;return s&&(s.state==='midday'||s.state==='intraday')?s:null}
+function sessTxt(){var s=sess();return s?(s.state==='midday'?'午间休市':'盘中')+'数据（截至 '+s.asof+'）':''}
+getJSON('data/meta.json').catch(function(){return null}).then(function(m){
+  META=m;
+  if(m){$('#foot').innerHTML=(sess()?'<b style="color:var(--c2)">今日（'+esc(sess().date)+'）为'+sessTxt()+'，不是收盘值，收盘后才是最终数据。</b><br>':'')+
+    '数据整理于 '+esc(m.updated)+'，指数日K截至 '+esc(m.kline_last)+'；非实时行情。<br>数据来自公开网页行情接口，可能有延迟或误差，本页仅作信息整理，不构成任何投资建议，市场有风险，据此操作风险自负。'}
+  else $('#foot').textContent='数据来自公开网页行情接口，可能有延迟或误差，本页仅作信息整理，不构成任何投资建议。';
+  var h=(location.hash||'').slice(1);
+  show(/^(idx|mkt|news)$/.test(h)?h:S.tab);
+});
 })();
 </script>
 </body>

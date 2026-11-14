@@ -457,13 +457,13 @@ function drawMkt(){
   var r=rows[msel],pr=off+msel>0?MK[off+msel-1]:null,tot=r.up==null?null:r.up+r.down+r.flat;
   $('#minfo').innerHTML='<b>'+r.date+'</b>'+(r.p?' <span style="color:var(--c2)">（半日，截至 '+r.p+'，非收盘）</span>':'')+'　成交额 <b>'+(r.amount_w==null?'—':r.amount_w.toFixed(2)+' 万亿')+'</b>'+
     (!r.p&&pr&&pr.amount_w!=null&&r.amount_w!=null?' <span class="'+cls(r.amount_w-pr.amount_w)+'">较上一记录日 '+pct(r.amount_w/pr.amount_w-1,1)+'</span>':'')+
-    '<br>上涨 <b class="up">'+fx(r.up,0)+'</b> · 下跌 <b class="dn">'+fx(r.down,0)+'</b> · 平盘 <b>'+fx(r.flat,0)+'</b>'+(tot?' · 上涨占比 <b>'+(r.up/tot*100).toFixed(1)+'%</b>':'')+
+    (r.breadth_source==='local_close'?' <small>本地日线补算</small>':'')+'<br>上涨 <b class="up">'+fx(r.up,0)+'</b> · 下跌 <b class="dn">'+fx(r.down,0)+'</b> · 平盘 <b>'+fx(r.flat,0)+'</b>'+(tot?' · 上涨占比 <b>'+(r.up/tot*100).toFixed(1)+'%</b>':'')+
     '<br>涨停 <b class="up">'+fx(r.zt,0)+'</b> · 跌停 <b class="dn">'+fx(r.dt,0)+'</b>';
   $('#mtab tbody').innerHTML=rows.map(function(r,i){return {r:r,i:i}}).reverse().slice(0,40).map(function(o){var r=o.r;
     return '<tr data-i="'+o.i+'" class="'+(o.i===msel?'sel':'')+'"><td>'+r.date.slice(5)+(r.p?' <small style="color:var(--c2)">'+r.p+'前</small>':'')+'</td><td>'+(r.amount_w==null?'—':r.amount_w.toFixed(2))+'</td><td><span class="up">'+fx(r.up,0)+'</span> / <span class="dn">'+fx(r.down,0)+'</span></td><td><span class="up">'+fx(r.zt,0)+'</span> / <span class="dn">'+fx(r.dt,0)+'</span></td></tr>'}).join('');
   $$('#mtab tbody tr').forEach(function(tr){tr.onclick=function(){msel=+tr.getAttribute('data-i');drawMkt()}});
   var full=MK.filter(function(r){return r.up!=null}).length;
-  $('#mnote').textContent='目前累计 '+MK.length+' 个交易日的记录，其中涨跌家数、涨停跌停 '+full+' 天。盘中/午休更新的当天记录标“半日”，浅色柱是截至该时刻的数据，收盘后会被完整记录替换。这两项没有可回补的历史来源，只能每天收盘后逐日累积；缺的显示“—”，不估算。'+
+  $('#mnote').textContent='目前累计 '+MK.length+' 个交易日的记录，其中涨跌家数 '+full+' 天。盘中/午休更新的当天记录标“半日”，浅色柱是截至该时刻的数据，收盘后会被完整记录替换。本地日线补算按有成交个股的相邻收盘价统计，覆盖范围与除权口径可能和行情源不同。缺失指标显示“—”。'+
     '成交额按上证、深证成指两个行情口径相加，涨跌家数为沪深A股（不含北交所，停牌不计）。点图或点表格行可看当天数值。';
 }
 

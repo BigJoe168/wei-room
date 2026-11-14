@@ -92,6 +92,24 @@ tbody tr{cursor:pointer}
 mark{background:var(--c2);color:var(--bg);padding:0 1px;border-radius:2px}
 .more{display:block;width:100%;margin:14px 0 0;padding:12px;border:1px solid var(--rule);background:none;color:var(--ink2);font-weight:600;font-size:14px;line-height:1;font-family:inherit;cursor:pointer;border-radius:8px}
 footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--rule);font-size:11.5px;line-height:1.7;color:var(--ink3)}
+:root[data-theme=light]{--bg:#fff;--sunk:#f1f4f8;--rule:#bdc9d9;--rule2:#dae3ee;--ink3:#58687d}
+.over-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.over-block{min-width:0;border-top:2px solid var(--c1);padding:10px 0;margin-bottom:14px}
+.over-block h2{font-size:16px;margin:0 0 8px}
+.over-block svg{width:100%;height:140px;display:block}
+.over-ring{width:132px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;margin:5px auto 10px}
+.over-ring b{width:74%;aspect-ratio:1;border-radius:50%;background:var(--bg);display:grid;place-items:center}
+#over-breadth{text-align:center}
+#over-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+#over-table th,#over-table td{text-align:right;padding:7px 5px;border-bottom:1px solid var(--rule2)}
+#over-table th:first-child,#over-table td:first-child{text-align:left;white-space:nowrap}
+#over-table th,#over-table tr:nth-child(even){background:var(--sunk)}
+#over-table button,#over-detail{color:var(--c1);background:none;border:0;font:inherit;cursor:pointer;padding:4px 0}
+#over-table button[aria-pressed=true]{font-weight:800;text-decoration:underline}
+.over-move{display:grid;grid-template-columns:60px minmax(40px,1fr);gap:5px;align-items:center}
+.over-bar{position:relative;height:12px;background:linear-gradient(90deg,transparent 49.5%,var(--ink3) 50%,transparent 50.5%)}
+.over-bar i{position:absolute;height:8px;top:2px;background:currentColor}
+@media(max-width:600px){.over-grid{grid-template-columns:1fr;gap:0}nav#tabs button{font-size:12px}}
 </style>
 </head>
 <body>
@@ -102,12 +120,26 @@ footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--rule);font-si
   <button id="tg" title="切换深浅主题"></button>
 </header>
 <nav id="tabs">
-  <button data-t="idx" class="on">指数走势</button>
+  <button data-t="overview" class="on">盘面总览</button>
+  <button data-t="idx">指数走势</button>
   <button data-t="mkt">市场温度</button>
   <button data-t="news">快讯检索</button>
 </nav>
 
-<section class="pane on" id="p-idx">
+<section class="pane on" id="p-overview">
+  <p class="note" id="over-date" role="status">正在加载行情…</p>
+  <div class="over-grid">
+    <div class="over-block"><h2 id="over-title">上证指数</h2><div id="over-line"></div>
+      <button id="over-detail">查看详细走势 ›</button><p class="note">近 20 个交易日 · 新浪指数日K</p></div>
+    <div class="over-block"><h2>市场涨跌分布</h2><div id="over-breadth"></div></div>
+  </div>
+  <div class="over-block"><h2>八大指数对比</h2>
+    <table id="over-table"><thead><tr><th scope="col">指数</th><th scope="col">点位</th><th scope="col">涨跌幅</th></tr></thead><tbody></tbody></table>
+    <p class="note">新浪指数日K · 相对前一交易日收盘 · 条形共用零线与刻度</p>
+  </div>
+</section>
+
+<section class="pane" id="p-idx">
   <div class="row" id="ichips"></div>
   <div class="head"><b id="ipx">—</b><span id="ichg"></span><small id="idt"></small></div>
   <div class="ctl">
@@ -176,12 +208,12 @@ $('#tg').onclick=function(){var n=theme()==='light'?'dark':'light';try{localStor
 paintTheme();
 var inited={};
 function show(t){
-  if(!/^(idx|mkt|news)$/.test(t))t='idx';
+  if(!/^(overview|idx|mkt|news)$/.test(t))t='overview';
   S.tab=t;save();
   $$('#tabs button').forEach(function(b){b.className=b.getAttribute('data-t')===t?'on':''});
   $$('section.pane').forEach(function(p){p.className='pane'+(p.id==='p-'+t?' on':'')});
   try{history.replaceState(null,'','#'+t)}catch(e){}
-  if(!inited[t]){inited[t]=1;({idx:initIdx,mkt:initMkt,news:initNews})[t]()}
+  if(!inited[t]){inited[t]=1;({overview:initOverview,idx:initIdx,mkt:initMkt,news:initNews})[t]()}
   else if(t==='idx')drawIdx();else if(t==='mkt')drawMkt();
 }
 $$('#tabs button').forEach(function(b){b.onclick=function(){show(b.getAttribute('data-t'))}});
@@ -195,6 +227,74 @@ var RMON={'3M':3,'6M':6,'1Y':12,'3Y':36,'ALL':0};
 var MAS=[[5,'m5','MA5'],[10,'m10','MA10'],[20,'m20','MA20'],[60,'m60','MA60']];
 var MACOL={m5:'var(--c2)',m10:'var(--c1)',m20:'var(--m20)',m60:'var(--ink3)'};
 var KL={},all=[],mas={},view={i0:0,n:0},sel=0,geo=null;
+function indexRows(code){
+  if(KL[code])return Promise.resolve(KL[code]);
+  return getJSON('data/kline_'+code+'.json').then(function(data){return KL[code]=data.rows});
+}
+
+async function initOverview(){
+  try{
+    var market=getJSON('data/market.json').catch(function(){return []});
+    var histories=await Promise.all(CODES.map(function(index){
+      return indexRows(index[0]).catch(function(){return []});
+    }));
+    var entries=histories.map(function(rows,i){
+      var latest=rows.at(-1), previous=rows.at(-2);
+      return {code:CODES[i][0],name:CODES[i][1],rows:rows.slice(-20),date:latest?latest[0]:'',
+        close:latest?latest[4]:null,change:latest&&previous&&previous[4]>0?latest[4]/previous[4]-1:null};
+    });
+    var date=entries.map(function(entry){return entry.date}).sort().pop();
+    var scale=Math.max(0.0001,...entries.filter(function(entry){return entry.date===date})
+      .map(function(entry){return Math.abs(entry.change)}));
+    var session=sess();
+    $('#over-date').textContent=date ? '行情日期 '+date+(session&&session.date===date?' · '+sessTxt():'')+
+      (META&&META.updated?' · 更新于 '+META.updated:'') : '暂无指数行情';
+    $('#over-table tbody').innerHTML=entries.map(function(entry){
+      var change=entry.date===date?entry.change:null, width=Math.abs(change)/scale*50;
+      return '<tr><td><button type="button">'+entry.name+'</button></td><td>'+
+        fx(entry.date===date?entry.close:null,2)+'</td><td><div class="over-move '+cls(change)+'">'+
+        '<span>'+pct(change)+'</span><span class="over-bar" aria-hidden="true"><i style="width:'+width+
+        '%;left:'+(change<0?50-width:50)+'%"></i></span></div></td></tr>';
+    }).join('');
+    var buttons=$$('#over-table button');
+    function select(i){
+      var entry=entries[i], rows=entry.rows, chart=$('#over-line');
+      buttons.forEach(function(button,j){button.setAttribute('aria-pressed',String(i===j))});
+      $('#over-title').textContent=entry.name+'走势';
+      $('#over-detail').onclick=function(){
+        var initialized=inited.idx;
+        S.code=entry.code;
+        show('idx');
+        if(initialized)loadIdx();
+      };
+      if(rows.length<2){chart.textContent='暂无足够的走势数据';return}
+      var values=rows.map(function(row){return row[4]});
+      var lo=Math.min(...values), hi=Math.max(...values);
+      var points=values.map(function(value,j){
+        return (4+j*312/(values.length-1)).toFixed(2)+','+(hi===lo?50:95-90*(value-lo)/(hi-lo)).toFixed(2);
+      }).join(' ');
+      chart.innerHTML='<svg viewBox="0 0 320 100" role="img" aria-label="近期收盘走势"><polyline points="'+
+        points+'" fill="none" stroke="var(--c1)" stroke-width="2.5"/></svg><p class="note">'+
+        esc(rows[0][0])+' 至 '+esc(entry.date)+' · '+fx(entry.close,2)+'</p>';
+    }
+    buttons.forEach(function(button,i){button.onclick=function(){select(i)}});
+    select(0);
+
+    var row=(await market).find(function(item){return item.date===date});
+    var breadth=$('#over-breadth');
+    var total=row&&row.up+row.down+row.flat;
+    if(!row||![row.up,row.down,row.flat].every(Number.isFinite)||total<=0){
+      breadth.textContent='暂无该交易日的涨跌家数';
+      return;
+    }
+    var up=row.up/total*100, down=(row.up+row.down)/total*100;
+    breadth.innerHTML='<div class="over-ring" style="background:conic-gradient(var(--up) 0 '+up+
+      '%,var(--dn) '+up+'% '+down+'%,var(--ink3) '+down+'% 100%)"><b>'+fx(total,0)+' 家</b></div>'+
+      '<span class="up">涨 '+fx(row.up,0)+'</span> · <span class="dn">跌 '+fx(row.down,0)+
+      '</span> · 平 '+fx(row.flat,0)+'<p class="note">按数据源统计口径'+
+      (row.p?' · 截至 '+esc(row.p):'')+'</p>';
+  }catch(error){fail($('#over-date'),error)}
+}
 function wkey(s){var p=s.split('-'),t=Date.UTC(+p[0],+p[1]-1,+p[2]),dow=(new Date(t).getUTCDay()+6)%7;return new Date(t-dow*864e5).toISOString().slice(0,10)}
 function agg(rows,per){
   var out=[],key=null,cur=null;
@@ -224,7 +324,7 @@ function initIdx(){
 }
 function loadIdx(){
   var code=S.code;
-  var p=KL[code]?Promise.resolve(KL[code]):getJSON('data/kline_'+code+'.json').then(function(j){return KL[code]=j.rows});
+  var p=indexRows(code);
   p.then(function(rows){
     all=agg(rows,S.per);
     all.forEach(function(b,i){b.p=i?all[i-1].c:null;b.chg=b.p?b.c/b.p-1:null});
@@ -414,7 +514,7 @@ getJSON('data/meta.json').catch(function(){return null}).then(function(m){
     '数据整理于 '+esc(m.updated)+'，指数日K截至 '+esc(m.kline_last)+'；非实时行情。<br>数据来自公开网页行情接口，可能有延迟或误差，本页仅作信息整理，不构成任何投资建议，市场有风险，据此操作风险自负。'}
   else $('#foot').textContent='数据来自公开网页行情接口，可能有延迟或误差，本页仅作信息整理，不构成任何投资建议。';
   var h=(location.hash||'').slice(1);
-  show(/^(idx|mkt|news)$/.test(h)?h:S.tab);
+  show(/^(overview|idx|mkt|news)$/.test(h)?h:'overview');
 });
 })();
 </script>
